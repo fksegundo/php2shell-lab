@@ -1,0 +1,114 @@
+name: php2shell-lab
+
+# CVE-2026-109618 / CVE-2026-109619 lab.
+# vuln-modphp  : PHP 8.4.26 + Apache prefork/mod_php  (vulnerable)
+# fixed-modphp : PHP 8.4.27 + Apache prefork/mod_php  (patched)
+#
+# The images are pinned to the same digests the reference exploit was
+# calibrated against, so the libphp offsets and heap layout match.
+
+services:
+  vuln-modphp:
+    image: php@sha256:60111400ff77bdc44fa79b4f072afe49a42abba71e0846ad496be4761dc9c11a
+    platform: linux/amd64
+    pull_policy: missing
+    hostname: vuln-modphp
+    ports:
+      - "127.0.0.1:8088:80"
+    volumes:
+      - ./conf/php.ini:/usr/local/etc/php/conf.d/zz-poc.ini:ro
+      - ./conf/apache.conf:/etc/apache2/conf-enabled/zz-poc.conf:ro
+      - ./src:/var/www/html:ro
+      - ./out:/out
+    command:
+      - /bin/sh
+      - -c
+      - mkdir -p /out && rm -f /out/p && chmod 777 /out && exec apache2-foreground
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/80'"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    restart: unless-stopped
+
+  # --- FPM variant -----------------------------------------------------
+  vuln-fpm:
+    image: php:8.4.26-fpm
+    platform: linux/amd64
+    hostname: vuln-fpm
+    volumes:
+      - ./conf/php-fpm.ini:/usr/local/etc/php/conf.d/zz-poc.ini:ro
+      - ./fpm/www.conf:/usr/local/etc/php-fpm.d/www.conf:ro
+      - ./src:/var/www/html:ro
+      - ./out-fpm:/out
+    command: ["/bin/sh", "-c", "mkdir -p /out /tmp/sessions && rm -f /out/p && chmod 777 /out && chmod 1777 /tmp/sessions && exec php-fpm"]
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/9000'"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    restart: unless-stopped
+
+  nginx-vuln:
+    image: nginx:1.27-alpine
+    platform: linux/amd64
+    ports:
+      - "127.0.0.1:8090:80"
+    volumes:
+      - ./fpm/nginx-vuln.conf:/etc/nginx/nginx.conf:ro
+      - ./src:/var/www/html:ro
+    depends_on:
+      - vuln-fpm
+    restart: unless-stopped
+
+  fixed-fpm:
+    image: php:8.4.27-fpm
+    platform: linux/amd64
+    hostname: fixed-fpm
+    volumes:
+      - ./conf/php-fpm.ini:/usr/local/etc/php/conf.d/zz-poc.ini:ro
+      - ./fpm/www.conf:/usr/local/etc/php-fpm.d/www.conf:ro
+      - ./src:/var/www/html:ro
+      - ./out-fpm-fixed:/out
+    command: ["/bin/sh", "-c", "mkdir -p /out /tmp/sessions && rm -f /out/p && chmod 777 /out && chmod 1777 /tmp/sessions && exec php-fpm"]
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/9000'"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    restart: unless-stopped
+
+  nginx-fixed:
+    image: nginx:1.27-alpine
+    platform: linux/amd64
+    ports:
+      - "127.0.0.1:8091:80"
+    volumes:
+      - ./fpm/nginx-fixed.conf:/etc/nginx/nginx.conf:ro
+      - ./src:/var/www/html:ro
+    depends_on:
+      - fixed-fpm
+    restart: unless-stopped
+
+  fixed-modphp:
+    image: php@sha256:e6bad969f0b673ce9121c88dabb53488ab1ca139d8ebfac1d1b1ab63f245f725
+    platform: linux/amd64
+    pull_policy: missing
+    hostname: fixed-modphp
+    ports:
+      - "127.0.0.1:8089:80"
+    volumes:
+      - ./conf/php.ini:/usr/local/etc/php/conf.d/zz-poc.ini:ro
+      - ./conf/apache.conf:/etc/apache2/conf-enabled/zz-poc.conf:ro
+      - ./src:/var/www/html:ro
+      - ./out-fixed:/out
+    command:
+      - /bin/sh
+      - -c
+      - mkdir -p /out && rm -f /out/p && chmod 777 /out && exec apache2-foreground
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/80'"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    restart: unless-stopped

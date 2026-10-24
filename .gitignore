@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Lab runtime output (bind-mounted proof/session artifacts)
+lab/out/
+lab/out-fixed/
+lab/out-fpm/
+lab/out-fpm-fixed/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
